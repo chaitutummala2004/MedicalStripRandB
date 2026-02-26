@@ -1204,4 +1204,7 @@ def get_medicine_info():
         return jsonify({'status': 'error', 'message': str(e)})
 
 if __name__ == '__main__':
-    app.run(debug=True, use_reloader=False, threaded=True)
+    # Use environment variable for port if available (for Render)
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False, threaded=True)
