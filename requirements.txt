@@ -1,0 +1,12 @@
+flask
+flask-cors
+opencv-python
+numpy
+paddleocr
+easyocr
+sqlite3
+fuzzywuzzy
+python-Levenshtein
+scikit-learn
+matplotlib
+gunicorn

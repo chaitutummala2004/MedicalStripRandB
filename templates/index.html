@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Medicine Billing System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .video-container { border: 2px solid #333; border-radius: 8px; overflow: hidden; width: 100%; max-width: 640px; margin: 0 auto; }
+        #video-feed { width: 100%; height: auto; }
+        .billing-container { height: 400px; overflow-y: auto; }
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container py-5">
+    <h1 class="text-center mb-4">AI Smart Medicine Billing System</h1>
+    <div class="row">
+        <div class="col-md-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Live Camera Feed</h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="video-container mb-3">
+                        <img id="video-feed" src="{{ url_for('video_feed') }}" alt="Camera Feed">
+                    </div>
+                    <div class="input-group mb-3">
+                        <button class="btn btn-outline-secondary w-100" id="find-local">Find Local Camera</button>
+                    </div>
+                    <div class="form-check text-start mb-2">
+                        <input class="form-check-input" type="checkbox" id="fast-mode" checked>
+                        <label class="form-check-label" for="fast-mode">Fast mode</label>
+                    </div>
+                    <div class="form-check text-start mb-3">
+                        <input class="form-check-input" type="checkbox" id="manual-qty" checked>
+                        <label class="form-check-label" for="manual-qty">Ask quantity after scan</label>
+                    </div>
+                    <div class="text-start mb-3 text-muted" id="auto-status">Auto scanning enabled</div>
+                    <div class="form-check text-start mb-3">
+                        <input class="form-check-input" type="checkbox" id="show-detect" checked>
+                        <label class="form-check-label" for="show-detect">Show detection messages</label>
+                    </div>
+                    <div class="d-grid gap-2">
+                      <button id="scan-btn" class="btn btn-success btn-lg">Scan & Bill Medicine</button>
+                      <button id="detect-strip" class="btn btn-outline-primary">Detect Strip Info</button>
+                    </div>
+                    <div id="scan-result" class="mt-3"></div>
+                    <div id="detect-msgs" class="mt-2"></div>
+                    <div id="detect-log" class="mt-2" style="font-family:monospace;font-size:0.9rem"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Sales / Billing</h5>
+                    <button class="btn btn-sm btn-outline-light" onclick="loadSales()">Refresh</button>
+                    <button id="report-btn" class="btn btn-sm btn-warning ms-2">Report</button>
+                </div>
+                <div class="card-body billing-container">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Medicine</th>
+                                <th>Qty</th>
+                                <th>Price</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sales-table-body"></tbody>
+                    </table>
+                </div>
+                <div class="card-footer">
+                    <strong>Total: <span id="grand-total">$0.00</span></strong>
+                </div>
+            </div>
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Manage Inventory</h5>
+                    <button class="btn btn-sm btn-outline-light" id="refresh-meds">Refresh</button>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2 mb-2">
+                        <div class="col-12"><input type="text" id="med-name" class="form-control" placeholder="Name"></div>
+                        <div class="col-3"><input type="number" id="med-price" class="form-control" placeholder="Price"></div>
+                        <div class="col-3"><input type="number" id="med-stock" class="form-control" placeholder="Stock"></div>
+                        <div class="col-3"><input type="number" id="med-discount" class="form-control" placeholder="Discount %"></div>
+                        <div class="col-3"><input type="date" id="med-mfg" class="form-control" placeholder="MFG"></div>
+                        <div class="col-3"><input type="date" id="med-exp" class="form-control" placeholder="EXP"></div>
+                    </div>
+                    <button class="btn btn-primary" id="add-med-btn">Add/Update Medicine</button>
+                    <div id="med-add-msg" class="mt-2"></div>
+                    <hr>
+                    <input type="text" id="med-filter" class="form-control mb-2" placeholder="Filter by name">
+                    <div class="table-responsive" style="max-height:260px; overflow:auto;">
+                        <table class="table table-sm">
+                            <thead><tr><th>Name</th><th>Price</th><th>Stock</th><th>Discount</th><th>MFG</th><th>EXP</th><th>Actions</th></tr></thead>
+                            <tbody id="meds-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row mt-3">
+      <div class="col-md-12">
+        <div class="card shadow-sm">
+          <div class="card-header bg-info text-white">
+            <h5 class="mb-0">Prescription Scan</h5>
+          </div>
+          <div class="card-body">
+            <div class="row g-2 align-items-center mb-2">
+              <div class="col-md-6">
+                <input type="file" id="rx-file" class="form-control" accept="image/*">
+              </div>
+              <div class="col-md-6 d-grid gap-2">
+                <button class="btn btn-primary" id="scan-prescription">Scan Prescription Image</button>
+                <button class="btn btn-outline-secondary" id="scan-prescription-camera">Scan From Camera</button>
+              </div>
+            </div>
+            <div id="rx-result" class="mb-2"></div>
+            <div class="table-responsive">
+              <table class="table table-sm">
+                <thead><tr><th>Medicine</th><th>Price</th><th>Action</th></tr></thead>
+                <tbody id="rx-list"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  $(document).ready(function() {
+  loadSales();
+  let msgTimer = null;
+  let lastCountsStr = '';
+  let lastSummaryStr = '';
+  function renderDetectMsgs(counts){
+    const person = counts['person'] || 0;
+    const chair = counts['chair'] || 0;
+    let html = '';
+    if (person > 0) html += `<div class="alert alert-info py-1">Person detected (${person})</div>`;
+    if (chair > 0) html += `<div class="alert alert-secondary py-1">Chair detected (${chair})</div>`;
+    if (!html) html = '';
+    $('#detect-msgs').html(html);
+  }
+  function startDetectMsgs(){
+    if (msgTimer) return;
+    msgTimer = setInterval(function(){
+      $.get('/detect_status', function(data){
+        const counts = data.counts || {};
+        const s = JSON.stringify(counts);
+        if (s !== lastCountsStr){
+          renderDetectMsgs(counts);
+          lastCountsStr = s;
+        }
+      });
+      $.get('/detect_summary', function(data){
+        const summary = data.summary || '';
+        if (summary && summary !== lastSummaryStr){
+          const el = $('#detect-log');
+          const lines = (el.data('lines') || []);
+          lines.push(summary);
+          while (lines.length > 8) { lines.shift(); }
+          el.data('lines', lines);
+          el.html('<div class="text-muted">' + lines.map(l=>l.replace(/</g,'&lt;')).join('<br>') + '</div>');
+          lastSummaryStr = summary;
+        }
+      });
+    }, 800);
+  }
+  function stopDetectMsgs(){ if (msgTimer) { clearInterval(msgTimer); msgTimer = null; $('#detect-msgs').empty(); } }
+
+  function renderPreview(matches){
+    let html = '<div class="alert alert-info">Review quantities and confirm billing</div>';
+    html += '<div class="table-responsive"><table class="table"><thead><tr><th>Medicine</th><th>Price</th><th>Available</th><th>Qty</th></tr></thead><tbody id="preview-body">';
+    matches.forEach(m => {
+      const q = m.suggested_qty || 1;
+      html += `<tr>
+        <td>${m.medicine}</td>
+        <td>$${m.price && m.price.toFixed ? m.price.toFixed(2) : m.price}</td>
+        <td>${m.available}</td>
+        <td><input type="number" min="1" max="${m.available}" value="${q}" class="form-control form-control-sm qty-input" data-id="${m.id || ''}" data-name="${m.medicine}"></td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    html += '<button id="confirm-bill" class="btn btn-primary">Confirm Billing</button>';
+    $('#scan-result').html(html);
+    $('#confirm-bill').click(function(){
+      const items = [];
+      $('#preview-body tr').each(function(){
+        const qty = parseInt($(this).find('.qty-input').val(), 10);
+        const id = parseInt($(this).find('.qty-input').data('id'), 10);
+        const name = $(this).find('.qty-input').data('name');
+        if (qty && qty > 0) { items.push({ id, name, qty }); }
+      });
+      $.ajax({
+        url: '/bill', method: 'POST', contentType: 'application/json', data: JSON.stringify({ items }),
+        success: function(billRes){
+          let billHtml = '';
+          if (billRes.results) {
+            billRes.results.forEach(res => {
+              if (res.status === 'success') {
+                billHtml += `<div class="alert alert-success">Billed: ${res.medicine} x${res.qty} (Total $${res.total.toFixed(2)})</div>`;
+              } else {
+                billHtml += `<div class="alert alert-danger">Error: ${res.message} (${res.medicine})</div>`;
+              }
+            });
+          }
+          $('#scan-result').html(billHtml);
+          loadSales();
+          $('#report-btn').click();
+        }, error: function(){ $('#scan-result').html('<div class="alert alert-danger">Billing request failed</div>'); }
+      });
+    });
+  }
+
+  function triggerScanAndPreview(){
+    const mode = $('#fast-mode').is(':checked') ? 'fast' : 'accurate';
+    const preview = $('#manual-qty').is(':checked') ? 1 : 0;
+    $.post('/scan', { mode, preview }, function(data) {
+      if ((data.preview && data.matches) && data.matches.length) {
+        renderPreview(data.matches);
+      } else if (preview === 1 && data.results) {
+        const matches = data.results.filter(r => r.status === 'success').map(r => ({
+          id: r.id || null,
+          medicine: r.medicine,
+          price: r.price,
+          available: 9999,
+          suggested_qty: r.qty || 1
+        }));
+        if (matches.length) renderPreview(matches); else $('#scan-result').html('<div class="alert alert-warning">No billable items detected</div>');
+      } else if (data.status === 'warning') {
+        $('#scan-result').html(`<div class="alert alert-warning">${data.message}</div>`);
+      } else if (data.status === 'error') {
+        $('#scan-result').html(`<div class="alert alert-danger">${data.message}</div>`);
+      } else if (data.results) {
+        let billHtml = '';
+        data.results.forEach(res => {
+          if (res.status === 'success') {
+            billHtml += `<div class="alert alert-success">Billed: ${res.medicine} x${res.qty} (Total $${res.total.toFixed(2)})</div>`;
+          } else {
+            billHtml += `<div class="alert alert-danger">Error: ${res.message} (${res.medicine})</div>`;
+          }
+        });
+        $('#scan-result').html(billHtml);
+        loadSales();
+      }
+    }).fail(function(){ $('#scan-result').html('<div class="alert alert-danger">Request Failed</div>'); });
+  }
+
+  $('#scan-btn').click(function() {
+    const btn = $(this);
+    btn.prop('disabled', true).text('Scanning...');
+    $('#scan-result').html('<div class="spinner-border text-primary" role="status"></div> Processing...');
+    triggerScanAndPreview();
+    setTimeout(function(){ btn.prop('disabled', false).text('Scan & Bill Medicine'); }, 1200);
+  });
+  $('#find-local').click(function(){
+    $('#scan-result').html('<div class="alert alert-info">Searching local cameras...</div>');
+    $.post('/auto_local', {}, function(res){
+      $('#scan-result').html(`<div class=\"alert alert-success\">Local camera connected (index ${res.index})</div>`);
+    }).fail(function(){ $('#scan-result').html('<div class="alert alert-danger">No local camera found</div>'); });
+  });
+  $('#show-detect').change(function(){ if ($(this).is(':checked')) { startDetectMsgs(); } else { stopDetectMsgs(); } });
+  if ($('#show-detect').is(':checked')) startDetectMsgs();
+
+    function loadMeds(){
+      $.get('/medicines', function(rows){
+        const filter = ($('#med-filter').val() || '').toLowerCase();
+        const tb = $('#meds-table'); tb.empty();
+        rows.filter(r => !filter || (r.name || '').toLowerCase().includes(filter)).forEach(r => {
+          const mfg = r.mfg_date ? new Date(r.mfg_date).toLocaleDateString() : '-';
+          const exp = r.exp_date ? new Date(r.exp_date).toLocaleDateString() : '-';
+          tb.append(`<tr>
+            <td>${r.name}</td>
+            <td>$${(r.price||0).toFixed(2)}</td>
+            <td>${r.stock||0}</td>
+            <td>${(r.discount||0).toFixed(1)}</td>
+            <td>${mfg}</td>
+            <td>${exp}</td>
+            <td>
+              <button class="btn btn-sm btn-danger" data-id="${r.id}" data-name="${r.name}">Delete</button>
+            </td>
+          </tr>`);
+        });
+      });
+    }
+    $('#refresh-meds').click(loadMeds);
+    $('#med-filter').on('input', loadMeds);
+    $(document).on('click', '#meds-table .btn-danger', function(){
+      const id = $(this).data('id'); const name = $(this).data('name');
+      $.ajax({ url:'/medicine_delete', method:'POST', contentType:'application/json', data: JSON.stringify({ id, name }),
+        success: function(){ $('#med-add-msg').html('<div class="alert alert-success">Deleted</div>'); loadMeds(); },
+        error: function(){ $('#med-add-msg').html('<div class="alert alert-danger">Delete failed</div>'); }
+      });
+    });
+    $('#add-med-btn').click(function(){
+      const payload = {
+        name: $('#med-name').val(),
+        price: parseFloat($('#med-price').val()||0), stock: parseInt($('#med-stock').val()||0,10),
+        discount: parseFloat($('#med-discount').val()||0), mfg_date: $('#med-mfg').val()||null, exp_date: $('#med-exp').val()||null
+      };
+      $.ajax({ url:'/medicine_add', method:'POST', contentType:'application/json', data: JSON.stringify(payload),
+        success: function(){ $('#med-add-msg').html('<div class="alert alert-success">Saved</div>'); loadMeds(); },
+        error: function(xhr){ const m = (xhr.responseJSON && xhr.responseJSON.message) || 'Save failed'; $('#med-add-msg').html('<div class="alert alert-danger">'+m+'</div>'); }
+      });
+    });
+    loadMeds();
+  });
+
+function loadSales() {
+  $.get('/sales_data', function(data) {
+    const tbody = $('#sales-table-body');
+    tbody.empty();
+    let total = 0;
+    data.forEach(item => {
+      total += item.total;
+      const time = new Date(item.time).toLocaleTimeString();
+      tbody.append(`<tr><td>${item.medicine}</td><td>${item.quantity}</td><td>$${item.total.toFixed(2)}</td><td>${time}</td></tr>`);
+    });
+    $('#grand-total').text('$' + total.toFixed(2));
+  });
+}
+</script>
+
+<script>
+$(function(){
+  $('#scan-prescription').click(function(){
+    const f = $('#rx-file')[0].files[0];
+    if (!f) { $('#rx-result').html('<div class="alert alert-warning">Please choose an image</div>'); return; }
+    const fd = new FormData();
+    fd.append('image', f);
+    $('#rx-result').html('<div class="spinner-border text-primary" role="status"></div> Scanning...');
+    $.ajax({
+      url: '/scan_prescription', method: 'POST', data: fd, processData: false, contentType: false,
+      success: function(res){
+        if (res.status === 'warning') {
+          $('#rx-result').html('<div class="alert alert-warning">'+(res.message||'No medicines recognized in prescription')+'</div>');
+        } else {
+          $('#rx-result').html('<div class="alert alert-success">Prescription scanned</div>');
+        }
+        const tb = $('#rx-list'); tb.empty();
+        (res.items||[]).forEach(it=>{
+          tb.append(`<tr><td>${it.name}</td><td>$${(it.price||0).toFixed(2)}</td><td><button class="btn btn-sm btn-outline-info" onclick="showMedInfo('${it.name}')">Info</button></td></tr>`);
+        });
+      },
+      error: function(xhr){
+        const m = (xhr.responseJSON && xhr.responseJSON.message) || 'Scan failed';
+        $('#rx-result').html('<div class="alert alert-danger">'+m+'</div>');
+      }
+    });
+  });
+  $('#scan-prescription-camera').click(function(){
+    $('#rx-result').html('<div class="spinner-border text-primary" role="status"></div> Scanning...');
+    $.post('/scan_prescription', {}, function(res){
+      if (res.status === 'warning') {
+        $('#rx-result').html('<div class="alert alert-warning">'+(res.message||'No medicines recognized in prescription')+'</div>');
+      } else {
+        $('#rx-result').html('<div class="alert alert-success">Prescription scanned</div>');
+      }
+      const tb = $('#rx-list'); tb.empty();
+      (res.items||[]).forEach(it=>{
+        tb.append(`<tr><td>${it.name}</td><td>$${(it.price||0).toFixed(2)}</td><td><button class="btn btn-sm btn-outline-info" onclick="showMedInfo('${it.name}')">Info</button></td></tr>`);
+      });
+    }).fail(function(xhr){
+      const m = (xhr.responseJSON && xhr.responseJSON.message) || 'Scan failed';
+      $('#rx-result').html('<div class="alert alert-danger">'+m+'</div>');
+    });
+  });
+  $('#detect-strip').click(function(){
+    $('#scan-result').html('<div class="spinner-border text-primary" role="status"></div> Detecting...');
+    $.get('/detect_strip', function(res){
+      if (res.status === 'success' && res.matches && res.matches.length){
+        let html = '';
+        res.matches.forEach(m=>{
+          html += `<div class="alert alert-info d-flex justify-content-between align-items-center">
+                    <span>Detected: ${m.medicine} - Price $${(m.price||0).toFixed(2)} | Stock ${m.stock||0}</span>
+                    <button class="btn btn-sm btn-info ms-2" onclick="showMedInfo('${m.medicine}')">More Info</button>
+                  </div>`;
+        });
+        $('#scan-result').html(html);
+      } else if (res.status === 'warning') {
+        $('#scan-result').html('<div class="alert alert-warning">'+(res.message||'No strip recognized')+'</div>');
+      } else {
+        $('#scan-result').html('<div class="alert alert-danger">Detection failed</div>');
+      }
+    }).fail(function(){ $('#scan-result').html('<div class="alert alert-danger">Detection failed</div>'); });
+  });
+});
+</script>
+
+<div class="modal" tabindex="-1" id="reportModal">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Inventory Report</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="report-body">
+        <div id="report-controls" class="mt-2 mb-3 d-flex gap-2">
+          <button class="btn btn-outline-warning flex-fill" onclick="showReportSection('summary')">Summary</button>
+          <button class="btn btn-outline-primary flex-fill" onclick="showReportSection('history')">History</button>
+          <button class="btn btn-outline-success flex-fill" onclick="showReportSection('receipt')">Print Receipt</button>
+          <button class="btn btn-outline-info flex-fill" onclick="showReportSection('batch')">Batch Summary</button>
+        </div>
+        <div id="summary-section" class="report-section"></div>
+        <div id="history-section" class="report-section" style="display:none;"></div>
+        <div id="receipt-section" class="report-section" style="display:none;"></div>
+        <div id="batch-section" class="report-section" style="display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="print-report-btn">Print Report</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" tabindex="-1" id="customerModal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Customer Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-control" id="cust-name" placeholder="Enter customer name">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Phone</label>
+          <input type="text" class="form-control" id="cust-phone" placeholder="Enter phone number">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Address</label>
+          <input type="text" class="form-control" id="cust-address" placeholder="Street, Area">
+        </div>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">City</label>
+            <input type="text" class="form-control" id="cust-city" placeholder="City">
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Postal Code</label>
+            <input type="text" class="form-control" id="cust-postal" placeholder="Postal Code">
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">State</label>
+            <input type="text" class="form-control" id="cust-state" placeholder="State">
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" id="cust-email" placeholder="Email">
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label">GST</label>
+            <input type="text" class="form-control" id="cust-gst" placeholder="GSTIN">
+          </div>
+          <div class="col-md-6 mb-3">
+            <label class="form-label">PAN No</label>
+            <input type="text" class="form-control" id="cust-pan" placeholder="PAN">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Payment Mode</label>
+          <select class="form-select" id="cust-pay">
+            <option value="CASH">Cash</option>
+            <option value="CARD">Card</option>
+            <option value="UPI">UPI</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Order No</label>
+          <input type="text" class="form-control" id="cust-number" placeholder="Optional">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="confirm-print">Finalize & Print</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" tabindex="-1" id="medInfoModal">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="medInfoTitle">Medicine Information</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="medInfoContent">
+          <p class="text-muted">Fetching info from Google...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showReportSection(sectionId) {
+  $('.report-section').hide();
+  $(`#${sectionId}-section`).show();
+  // If it's the receipt section, ensure the print button in footer is visible/appropriate
+  if (sectionId === 'receipt') {
+    $('#print-report-btn').show();
+  } else {
+    $('#print-report-btn').hide();
+  }
+}
+
+function showMedInfo(name) {
+  $('#medInfoTitle').text(`Information for ${name}`);
+  $('#medInfoContent').html('<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p>Searching for uses and dosage info...</p></div>');
+  const modal = new bootstrap.Modal(document.getElementById('medInfoModal'));
+  modal.show();
+
+  $.get(`/medicine_info?name=${encodeURIComponent(name)}`, function(res) {
+    if (res.status === 'success') {
+      window.open(res.search_query, '_blank');
+      // Update modal to show that we redirected
+      let content = `<h6>Redirecting to Google...</h6>
+                     <p>We've opened a new tab with information about <strong>${name}</strong>.</p>
+                     <div class="d-grid gap-2">
+                       <a href="${res.search_query}" target="_blank" class="btn btn-primary">Re-open Search Results</a>
+                     </div>`;
+      $('#medInfoContent').html(content);
+    } else {
+      $('#medInfoContent').html('<div class="alert alert-danger">Failed to fetch information.</div>');
+    }
+  }).fail(function() {
+    $('#medInfoContent').html('<div class="alert alert-danger">Error connecting to server.</div>');
+  });
+}
+
+$(function(){
+  $('#report-btn').click(function(){
+    $.get('/report', function(data){
+      // 1. Summary Section (Always visible)
+      let summaryHtml = '';
+      if (data.summary) {
+        summaryHtml += '<h6>Inventory Summary</h6><div class="table-responsive"><table class="table table-striped"><thead><tr><th>Medicine</th><th>In Stock</th><th>Sold</th></tr></thead><tbody>';
+        data.summary.forEach(r=>{ summaryHtml += `<tr><td>${r.medicine}</td><td>${r.stock}</td><td>${r.sold}</td></tr>`; });
+        summaryHtml += '</tbody></table></div>';
+      }
+      $('#summary-section').html(summaryHtml);
+
+      // 2. Batch Section
+      let batchHtml = '';
+      if (data.batches) {
+        batchHtml += '<h6 class="mt-3">Batch Details</h6><div class="table-responsive"><table class="table table-striped"><thead><tr><th>Batch ID</th><th>Medicine</th><th>Batch Stock</th><th>MFG Date</th><th>EXP Date</th><th>Discount %</th></tr></thead><tbody>';
+        data.batches.forEach(r=>{
+          const mfg = r.mfg_date ? new Date(r.mfg_date).toLocaleDateString() : '-';
+          const exp = r.exp_date ? new Date(r.exp_date).toLocaleDateString() : '-';
+          batchHtml += `<tr><td>${r.batch_id}</td><td>${r.medicine}</td><td>${r.batch_stock}</td><td>${mfg}</td><td>${exp}</td><td>${r.discount}</td></tr>`;
+        });
+        batchHtml += '</tbody></table></div>';
+      }
+      $('#batch-section').html(batchHtml);
+
+      // 3. Receipt Section (Current Billing)
+      let receiptHtml = '';
+      if (data.current_receipt && data.current_receipt.length){
+        let total = 0;
+        receiptHtml += '<h6 class="mt-3">Current Billing (Printable Receipt)</h6><div class="table-responsive"><table class="table table-striped"><thead><tr><th>Medicine</th><th>Qty</th><th>Unit Price</th><th>Discount %</th><th>Line Total</th></tr></thead><tbody>';
+        data.current_receipt.forEach(item => { total += item.total; receiptHtml += `<tr><td>${item.medicine}</td><td>${item.qty}</td><td>$${item.unit_price.toFixed(2)}</td><td>${item.discount}</td><td>$${item.total.toFixed(2)}</td></tr>`; });
+        receiptHtml += `</tbody></table></div><div class="text-end"><strong>Receipt Total: $${total.toFixed(2)}</strong></div>`;
+      } else {
+        receiptHtml += '<div class="alert alert-info mt-3">No current billing. Scan items to create a receipt.</div>';
+      }
+      $('#receipt-section').html(receiptHtml);
+
+      // 4. History Section
+      let historyHtml = '';
+      if (data.history && data.history.length){
+        historyHtml += '<h6 class="mt-3">Receipts History</h6><div class="table-responsive"><table class="table table-striped"><thead><tr><th>ID</th><th>Number</th><th>Customer</th><th>Payment</th><th>Total</th><th>Printed</th><th>Time</th></tr></thead><tbody>';
+        data.history.forEach(r=>{ historyHtml += `<tr><td>${r.id}</td><td>${r.number || '-'}</td><td>${r.customer || '-'}</td><td>${r.payment || '-'}</td><td>$${(r.total||0).toFixed(2)}</td><td>${r.printed ? 'Yes' : 'No'}</td><td>${new Date(r.time).toLocaleString()}</td></tr>`; });
+        historyHtml += '</tbody></table></div>';
+      }
+      $('#history-section').html(historyHtml);
+
+      // Reset view
+      $('.report-section').hide();
+      $('#summary-section').show(); // Show summary by default
+      $('#print-report-btn').hide();
+
+      const modal = new bootstrap.Modal(document.getElementById('reportModal')); modal.show();
+    }).fail(function(){ $('#summary-section').html('<div class="alert alert-danger">Failed to load report</div>'); });
+  });
+  $(document).on('click', '#print-report-btn', function(){
+    const modal = new bootstrap.Modal(document.getElementById('customerModal'));
+    modal.show();
+  });
+  $(document).on('click', '#confirm-print', function(){
+    const name = $('#cust-name').val();
+    const phone = $('#cust-phone').val();
+    const addr = $('#cust-address').val();
+    const city = $('#cust-city').val();
+    const postal = $('#cust-postal').val();
+    const state = $('#cust-state').val();
+    const email = $('#cust-email').val();
+    const gst = $('#cust-gst').val();
+    const pan = $('#cust-pan').val();
+    const payment = $('#cust-pay').val();
+    const number = $('#cust-number').val();
+    $.ajax({
+      url: '/print_receipt',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ customer_name: name, customer_phone: phone, payment_mode: payment, number, customer_address: addr, customer_city: city, customer_postal: postal, customer_state: state, customer_email: email, customer_gst: gst, customer_pan: pan }),
+      success: function(res){
+        const cm = bootstrap.Modal.getInstance(document.getElementById('customerModal'));
+        if (cm) cm.hide();
+        if (res.print_html) $('#report-body').html(res.print_html);
+        window.print();
+        setTimeout(function(){ $('#report-body').append('<div class="alert alert-success mt-2">Receipt finalized and stock updated. Ready for next billing.</div>'); }, 300);
+      },
+      error: function(){ $('#report-body').append('<div class="alert alert-danger mt-2">Failed to finalize receipt</div>'); }
+    });
+  });
+});
+</script>
+
+<style>
+@media print {
+  body * { visibility: hidden; }
+  #reportModal, #reportModal * { visibility: visible; }
+  #reportModal { position: absolute; left: 0; top: 0; width: 100%; }
+}
+</style>
+
+</body>
+</html>
